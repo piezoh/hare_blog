@@ -15,7 +15,10 @@ class PostController extends Controller
      */
     public function index()
     {
-        return view('posts.index');
+        $posts = Post::latest()->paginate(4);
+
+
+        return view('posts.index', compact('posts'));
     }
 
     /**
@@ -35,7 +38,7 @@ class PostController extends Controller
         $post->user_id = $request->user()->id;
 
         $file = $request->file('image');
-        $post->image = date('YmdHis') . '_' . $file->getClientOriginalName();
+        $post->image = self::createFileName($file);
 
         // トランザクション開始
         DB::beginTransaction();
@@ -101,9 +104,8 @@ class PostController extends Controller
         $file = $request->file('image');
 
         if ($file) {
-            $delete_file_path = 'images/posts' . $post->image;
-            $post->image = date('YmdHis') . '_'.
-                $file->getClientOriginalName();
+            $delete_file_path = $post->image_url;
+            $post->image = self::createFileName($file);
         }
 
         $post->fill($request->all());
@@ -149,5 +151,10 @@ class PostController extends Controller
     public function destroy(string $id)
     {
         //
+    }
+
+    private static function createFileName($file)
+    {
+        return date('YmdHis') . '_' . $file->getClientOriginalName();
     }
 }
