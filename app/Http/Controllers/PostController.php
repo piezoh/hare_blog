@@ -17,7 +17,6 @@ class PostController extends Controller
     {
         $posts = Post::with('user')->latest()->paginate(4);
 
-
         return view('posts.index', compact('posts'));
     }
 
@@ -55,18 +54,15 @@ class PostController extends Controller
 
             // トランザクション終了(成功)
             DB::commit();
-
         } catch (\Exception $e) {
             // トランザクション終了(失敗)
             DB::rollback();
             return back()->withInput()->withErrors($e->getMessage());
         }
-        
+
         return redirect()
             ->route('posts.show', $post)
-            // フラッシュメッセージ
             ->with('notice', '記事を登録しました');
-
     }
 
     /**
@@ -94,6 +90,7 @@ class PostController extends Controller
      */
     public function update(UpdatePostRequest $request, string $id)
     {
+
         $post = Post::find($id);
 
         if ($request->user()->cannot('update', $post)) {
@@ -104,7 +101,7 @@ class PostController extends Controller
         $file = $request->file('image');
 
         if ($file) {
-            $delete_file_path = $post->image_url;
+            $delete_file_path = $post->image_path;
             $post->image = self::createFileName($file);
         }
 
@@ -113,26 +110,23 @@ class PostController extends Controller
         // トランザクション開始
         DB::beginTransaction();
         try {
-            // 更新
+            // 登録
             $post->save();
 
             if ($file) {
-                // 新しい画像アップロードに失敗したら
+                // 画像アップロード
                 if (!Storage::putFileAs('images/posts', $file, $post->image)) {
                     // 例外を投げてロールバックさせる
                     throw new \Exception('画像ファイルの保存に失敗しました。');
                 }
 
-                // 古い画像削除に失敗したら
                 if (!Storage::delete($delete_file_path)) {
-                    //アップロードした画像を削除する
-                    Storage::delete('images/posts/' . $post->image);
-                    //例外を投げてロールバックさせる
+                    Storage::delete($post->image_path);
                     throw new \Exception('画像ファイルの削除に失敗しました。');
                 }
             }
 
-        // トランザクション終了(成功)
+            // トランザクション終了(成功)
             DB::commit();
         } catch (\Exception $e) {
             // トランザクション終了(失敗)
@@ -140,9 +134,9 @@ class PostController extends Controller
             return back()->withInput()->withErrors($e->getMessage());
         }
 
-        return redirect()->route('posts.show', $post)
+        return redirect()
+            ->route('posts.show', $post)
             ->with('notice', '記事を更新しました');
-
     }
 
     /**
@@ -150,7 +144,29 @@ class PostController extends Controller
      */
     public function destroy(string $id)
     {
-        //
+        $post = Post::find($id);
+
+        // トランザクション開始
+        DB::beginTransaction();
+        try {
+            $post->delete();
+
+            // 画像削除
+            if (!Storage::delete($post->image_path)) {
+                // 例外を投げてロールバックさせる
+                throw new \Exception('画像ファイルの削除に失敗しました。');
+            }
+
+            // トランザクション終了(成功)
+            DB::commit();
+        } catch (\Exception $e) {
+            // トランザクション終了(失敗)
+            DB::rollback();
+            return back()->withErrors($e->getMessage());
+        }
+
+        return redirect()->route('posts.index')
+            ->with('notice', '記事を削除しました');
     }
 
     private static function createFileName($file)
